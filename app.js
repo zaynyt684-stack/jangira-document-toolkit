@@ -1,49 +1,216 @@
-const $=s=>document.querySelector(s), view=$("#view"), toast=$("#toast");
-const navItems=[["dashboard","⌂ Dashboard"],["workspace","▣ My Document"],["pdf","▤ PDF Studio"],["enhance","✦ Enhance"],["crop","⌗ Advanced Crop"],["idcard","▥ ID Card Organizer"],["image","◈ Image Tools"],["print","▦ Print Studio"],["scanner","⌁ Document Scanner"],["utilities","⚙ Utilities"],["settings","⚙ Settings"]];
-const S={file:null,name:"",type:"",pages:[],page:0,rotation:0,brightness:100,contrast:100,grayscale:false,history:[],future:[]};
-function msg(x){toast.innerHTML='<div class="toast">'+x+'</div>';setTimeout(()=>toast.innerHTML="",2500)}
-function save(){try{localStorage.setItem("jdt-recent",JSON.stringify({name:S.name,type:S.type,thumb:S.pages[0]?.src||"",date:Date.now()}))}catch{}}
-function renderNav(active="dashboard"){$("#nav").innerHTML=navItems.map(([id,t])=>'<button data-nav="'+id+'" class="'+(id===active?"active":"")+'">'+t+'</button>').join("");document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>go(b.dataset.nav))}
-function go(id){renderNav(id);$("#pageTitle").textContent=navItems.find(x=>x[0]===id)?.[1].replace(/^[^ ]+ /,"")||"Dashboard";if(id==="dashboard")return dashboard();if(id==="workspace")return workspace();if(id==="pdf")return pdfStudio();if(id==="enhance")return enhance();if(id==="crop")return crop();if(id==="idcard")return idcard();if(id==="image")return imageTools();if(id==="print")return printStudio();if(id==="scanner")return scanner();if(id==="utilities")return utilities();if(id==="settings")return settings()}
-function dashboard(){view.innerHTML='<div class="hero"><div class="eyebrow">SMART DIGITAL WORKSPACE</div><h2>One upload. Many possibilities.</h2><p>Upload once, then crop, enhance, arrange, convert, build PDFs and prepare print-ready documents from the same Active Document.</p><button class="btn primary" onclick="openUpload()">＋ Upload Document</button><div class="drop" id="drop">Drop JPG, PNG, WebP or PDF here<br><small>Processing stays in your browser whenever possible.</small></div></div><div class="section-title"><h2>Frequently Used</h2></div><div class="cards">'+[["▥","ID Card Organizer","Front + back cards on A4"],["✦","Enhance","Clean, sharpen and scan"],["⌗","Advanced Crop","Perspective correction"],["▦","Print Studio","Realistic A4 layouts"],["▤","PDF Studio","Merge, split and arrange"],["◈","Image Tools","Resize and compress"]].map(x=>'<div class="card" onclick="go(\''+({["ID Card Organizer":"idcard","Enhance":"enhance","Advanced Crop":"crop","Print Studio":"print","PDF Studio":"pdf","Image Tools":"image"}[x[1]])+'\')"><div style="font-size:24px">'+x[0]+'</div><h3>'+x[1]+'</h3><p>'+x[2]+'</p></div>').join("")+'</div>';bindDrop()}
-function openUpload(){$("#fileInput").click()}
-async function loadFile(f){if(!f)return;if(!/\.(jpe?g|png|webp|pdf)$/i.test(f.name)){msg("Unsupported file type");return}S.file=f;S.name=f.name;S.type=f.type;S.pages=[];S.page=0;S.rotation=0;S.history=[];S.future=[];if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){await loadPDF(f)}else{const src=await readData(f);S.pages=[{src,name:f.name,rotation:0}]}save();msg("Document loaded");go("workspace")}
-function readData(f){return new Promise((res,rej)=>{const r=new FileReader;r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
-async function loadPDF(f){try{const pdf=await pdfjs(f);S.pages=pdf.map((src,i)=>({src,name:"Page "+(i+1),rotation:0}))}catch(e){msg("PDF preview needs a modern browser; export tools remain available.")}}
-async function pdfjs(f){const data=await f.arrayBuffer();const pdf=await window.pdfjsLib.getDocument({data}).promise;const out=[];for(let n=1;n<=pdf.numPages;n++){const page=await pdf.getPage(n),vp=page.getViewport({scale:1.5}),c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;await page.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;out.push(c.toDataURL("image/jpeg",.92))}return out}
-function workspace(){if(!S.pages.length){view.innerHTML='<div class="empty"><h2>No active document</h2><p>Upload a document to start the shared workspace.</p><button class="btn primary" onclick="openUpload()">Upload Document</button></div>';return}view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="mainImg" src="'+S.pages[S.page].src+'"></div><div class="toolbar"><button class="tool" onclick="rotate(90)">↻ Rotate</button><button class="tool" onclick="rotate(-90)">↺ Rotate</button><button class="tool" onclick="flip()">↔ Flip</button><button class="tool" onclick="undo()">Undo</button><button class="tool" onclick="redo()">Redo</button><button class="tool" onclick="resetPage()">Reset</button></div><div class="page-grid">'+S.pages.map((p,i)=>'<div class="thumb" onclick="S.page='+i+';workspace()"><img src="'+p.src+'"><small>Page '+(i+1)+'</small></div>').join("")+'</div></div><div class="tools-panel"><h3>Active Document</h3><p>'+esc(S.name)+'</p><p class="muted">'+S.pages.length+' page(s)</p><button class="btn primary" style="width:100%" onclick="downloadCurrent()">Export JPG</button><button class="btn" style="width:100%;margin-top:8px" onclick="imageToPDF()">Export PDF</button><hr><button class="tool" onclick="go('crop')">Advanced Crop →</button><button class="tool" onclick="go('enhance')">Enhance →</button><button class="tool" onclick="go('print')">Print Studio →</button></div></div>'}
-function snapshot(){S.history.push(JSON.stringify(S.pages));if(S.history.length>20)S.history.shift();S.future=[]}
-function rotate(a){snapshot();S.pages[S.page].rotation=(S.pages[S.page].rotation+a+360)%360;workspace()}
-function flip(){snapshot();S.pages[S.page].flip=!S.pages[S.page].flip;workspace()}
-function resetPage(){snapshot();S.pages[S.page].rotation=0;S.pages[S.page].flip=false;workspace()}
-function undo(){if(!S.history.length)return;S.future.push(JSON.stringify(S.pages));S.pages=JSON.parse(S.history.pop());workspace()}
-function redo(){if(!S.future.length)return;S.history.push(JSON.stringify(S.pages));S.pages=JSON.parse(S.future.pop());workspace()}
-function enhance(){if(!S.pages.length)return noDoc();view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="enhImg" src="'+S.pages[S.page].src+'" style="filter:brightness('+S.brightness+'%) contrast('+S.contrast+'%)'+(S.grayscale?' grayscale(1)':'')+'"></div></div><div class="tools-panel"><h3>Enhancer</h3><label>Brightness <output id="bv">'+S.brightness+'</output></label><input type="range" min="40" max="160" value="'+S.brightness+'" oninput="S.brightness=+this.value;$('#+'bv').textContent=this.value;$('#+'enhImg').style.filter=filters()"><label>Contrast <output id="cv">'+S.contrast+'</output></label><input type="range" min="40" max="180" value="'+S.contrast+'" oninput="S.contrast=+this.value;$('#+'cv').textContent=this.value;$('#+'enhImg').style.filter=filters()"><label>Scan mode</label><select id="mode" onchange="modeEnh(this.value)"><option>Clean Document</option><option>Print Ready</option><option>Text Scan</option><option>B&W Scan</option><option>ID Card</option><option>Photo Document</option></select><button class="btn primary" style="width:100%;margin-top:16px" onclick="applyEnhance()">Apply Enhancement</button></div></div>'}
-function filters(){return 'brightness('+S.brightness+'%) contrast('+S.contrast+'%)'+(S.grayscale?' grayscale(1)':'')}
-function modeEnh(v){S.grayscale=v==="B&W Scan"||v==="Text Scan";if(v==="Print Ready"){S.brightness=108;S.contrast=125}if(v==="ID Card"){S.brightness=105;S.contrast=115}enhance()}
-async function applyEnhance(){if(!S.pages.length)return;const img=await imageBitmap(S.pages[S.page].src),c=document.createElement("canvas");c.width=img.width;c.height=img.height;const x=c.getContext("2d");x.filter=filters();x.drawImage(img,0,0);S.pages[S.page].src=c.toDataURL("image/jpeg",.94);save();msg("Enhancement applied");workspace()}
-function imageBitmap(src){return new Promise((res,rej)=>{const i=new Image;i.onload=()=>res(i);i.onerror=rej;i.src=src})}
-function crop(){if(!S.pages.length)return noDoc();view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="cropImg" src="'+S.pages[S.page].src+'"></div></div><div class="tools-panel"><h3>Advanced Crop</h3><p class="muted">Browser crop with presets. Perspective correction can be done interactively with the four-corner overlay in the next canvas revision.</p><select id="cropPreset"><option value="free">Free</option><option value="a4">A4</option><option value="a5">A5</option><option value="id">ID Card</option><option value="passport">Passport</option></select><label>Rotation</label><input type="range" min="-45" max="45" value="0" id="angle"><button class="btn primary" style="width:100%;margin-top:16px" onclick="cropPreset()">Apply Crop Preset</button></div></div>'}
-async function cropPreset(){const p=$("#cropPreset").value;if(p==="free"){msg("Free crop is available by browser image editing; choose a preset for exact ratio.");return}const img=await imageBitmap(S.pages[S.page].src);let ratio=p==="a4"?210/297:p==="a5"?148/210:p==="id"?85.6/53.98:35/45;let w=img.width,h=img.height,tw=w,th=w/ratio;if(th>h){th=h;tw=h*ratio}const c=document.createElement("canvas");c.width=Math.round(tw);c.height=Math.round(th);c.getContext("2d").drawImage(img,(w-tw)/2,(h-th)/2,tw,th,0,0,tw,th);snapshot();S.pages[S.page].src=c.toDataURL("image/jpeg",.95);workspace();msg("Crop applied")}
-function idcard(){view.innerHTML='<div class="hero"><div class="eyebrow">PRINT-READY ID CARD WORKSPACE</div><h2>Front + Back → A4</h2><p>Build a card layout from the active document. Default physical size is 85.60 × 53.98 mm.</p><button class="btn primary" onclick="go(\'print\')">Open Print Studio</button></div><div class="cards"><div class="card"><h3>Default size</h3><p>85.60 × 53.98 mm</p></div><div class="card"><h3>Layout</h3><p>Front + back, adjustable gap, margin and scale.</p></div><div class="card"><h3>Export</h3><p>JPG, PNG or A4 PDF.</p></div></div>'}
-function imageTools(){if(!S.pages.length)return noDoc();view.innerHTML='<div class="cards"><div class="card"><h3>Convert</h3><p>Export current page as JPG or PNG.</p><button class="btn" onclick="downloadCurrent(\'png\')">PNG</button> <button class="btn" onclick="downloadCurrent(\'jpg\')">JPG</button></div><div class="card"><h3>Resize</h3><label>Width (px)</label><input id="rw" type="text" value="1200"><button class="btn primary" style="margin-top:10px" onclick="resizeImage()">Resize & Export</button></div><div class="card"><h3>Compression</h3><label>Quality</label><input id="quality" type="range" min="20" max="100" value="85"><button class="btn primary" onclick="compressImage()">Compress & Export</button></div></div>'}
-async function resizeImage(){const img=await imageBitmap(S.pages[S.page].src),w=Math.max(1,+$("#rw").value||img.width),h=Math.round(img.height*w/img.width),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);downloadData(c.toDataURL("image/jpeg",.92),"resized.jpg")}
-async function compressImage(){const img=await imageBitmap(S.pages[S.page].src),c=document.createElement("canvas");c.width=img.width;c.height=img.height;c.getContext("2d").drawImage(img,0,0);downloadData(c.toDataURL("image/jpeg",+$("#quality").value/100),"compressed.jpg")}
-function printStudio(){if(!S.pages.length)return noDoc();view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>A4 Print Preview</h3><div id="a4" style="background:white;color:#111;min-height:650px;max-width:460px;margin:auto;padding:28px;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start">'+S.pages.map(p=>'<div style="border:1px solid #bbb;aspect-ratio:85.6/53.98;overflow:hidden"><img src="'+p.src+'" style="width:100%;height:100%;object-fit:contain;transform:rotate('+p.rotation+'deg)"></div>').join("")+'</div></div><div class="tools-panel"><h3>Print Layout Studio</h3><label>Items per page</label><select id="ipp" onchange="msg(this.value+\' items selected\')"><option>1</option><option>2</option><option selected>4</option><option>6</option><option>8</option></select><label>Paper</label><select><option>A4</option><option>A5</option><option>A3</option><option>Letter</option><option>Legal</option><option>Custom</option></select><label>Margin (mm)</label><input type="range" min="0" max="30" value="10"><label>Gap (mm)</label><input type="range" min="0" max="20" value="4"><button class="btn primary" style="width:100%;margin-top:16px" onclick="imageToPDF()">Export A4 PDF</button><button class="btn" style="width:100%;margin-top:8px" onclick="window.print()">Print</button></div></div>'}
-function pdfStudio(){view.innerHTML='<div class="hero"><div class="eyebrow">PDF STUDIO</div><h2>Arrange, merge and export</h2><p>Use the active document pages for quick PDF creation. Add more images from the upload button.</p><button class="btn primary" onclick="imageToPDF()">Export current pages to PDF</button></div><div class="section-title"><h2>Pages</h2><button class="btn" onclick="openUpload()">＋ Add files</button></div><div class="page-grid">'+(S.pages.length?S.pages.map((p,i)=>'<div class="thumb"><img src="'+p.src+'"><small>Page '+(i+1)+' <button class="tool" onclick="deletePage('+i+')">Delete</button></small></div>').join(""):'<div class="empty">No pages loaded.</div>')+'</div>'}
-function deletePage(i){S.pages.splice(i,1);S.page=Math.max(0,Math.min(S.page,S.pages.length-1));pdfStudio()}
-async function imageToPDF(){if(!S.pages.length)return noDoc();const {jsPDF}=window.jspdf;const pdf=new jsPDF("p","mm","a4");for(let i=0;i<S.pages.length;i++){if(i)pdf.addPage();const img=await imageBitmap(S.pages[i].src),ratio=img.width/img.height;let w=190,h=w/ratio;if(h>277){h=277;w=h*ratio}pdf.addImage(S.pages[i].src,"JPEG",(210-w)/2,(297-h)/2,w,h)}pdf.save((S.name||"document").replace(/\.[^.]+$/,"")+".pdf");msg("PDF exported")}
-function downloadCurrent(ext="jpg"){if(!S.pages.length)return noDoc();const p=S.pages[S.page];if(ext==="png")return downloadData(p.src,"page.png");if(ext==="jpg")return downloadData(p.src,"page.jpg");downloadData(p.src,"page.jpg")}
-function downloadData(data,name){const a=document.createElement("a");a.href=data;a.download=name;a.click()}
-function scanner(){view.innerHTML='<div class="hero"><div class="eyebrow">DOCUMENT SCANNER</div><h2>Camera capture</h2><p>Use your phone camera to capture a document, then continue through Crop → Enhance → PDF.</p><button class="btn primary" onclick="openUpload()">Open Camera / Gallery</button><input type="file" accept="image/*" capture="environment" onchange="loadFile(this.files[0])" style="margin-top:16px"></div>'}
-function utilities(){view.innerHTML='<div class="cards">'+[["Blank A4","Generate a clean A4 PDF"],["Image Dimensions","Inspect current image"],["File Size","Check selected file size"],["PDF Page Counter","Count active pages"],["Metadata","Show file metadata"],["Page Extraction","Export selected page"],["Rename","Change export filename"],["Signature Resize","Resize signature using image tools"]].map((x,i)=>'<div class="card"><h3>'+x[0]+'</h3><p>'+x[1]+'</p><button class="btn" onclick="utility('+i+')">Open</button></div>').join("")+'</div>'}
-function utility(i){if(i===1&&S.pages.length){imageBitmap(S.pages[S.page].src).then(x=>msg(x.width+" × "+x.height+" px"))}else if(i===2&&S.file)msg((S.file.size/1024).toFixed(1)+" KB");else if(i===3)msg(S.pages.length+" page(s)");else msg("Utility opened.")}
-function settings(){view.innerHTML='<div class="cards"><div class="card"><h3>Privacy</h3><p>Processing is client-side where possible. Files are not intentionally uploaded by this app.</p></div><div class="card"><h3>Recent documents</h3><p>Stored locally in browser storage.</p><button class="btn danger" onclick="localStorage.removeItem(\'jdt-recent\');msg(\'Recent data cleared\')">Clear recent</button></div><div class="card"><h3>About</h3><p>Jangira E Mitra — Smart Document Toolkit<br>One Upload. Many Possibilities.</p></div></div>'}
-function noDoc(){msg("Upload a document first");go("dashboard")}function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-function bindDrop(){const d=$("#drop");if(!d)return;d.ondragover=e=>{e.preventDefault();d.classList.add("drag")};d.ondragleave=()=>d.classList.remove("drag");d.ondrop=e=>{e.preventDefault();d.classList.remove("drag");loadFile(e.dataTransfer.files[0])}}
-$("#uploadBtn").onclick=openUpload;$("#fileInput").onchange=e=>loadFile(e.target.files[0]);$("#openRecent").onclick=()=>{const r=JSON.parse(localStorage.getItem("jdt-recent")||"null");if(r?.thumb){S.name=r.name;S.pages=[{src:r.thumb,name:r.name}];go("workspace")}else msg("No recent document")};$("#menu").onclick=()=>$(".sidebar").classList.toggle("open");renderNav();dashboard();
-// Advanced four-point perspective crop UI
-window.perspectiveCrop=()=>{if(!S.pages.length)return noDoc();view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>Four-Point Perspective Crop</h3><div class="perspective-stage"><canvas id="pcCanvas"></canvas></div></div><div class="tools-panel"><p class="muted">Drag the four corner points onto the document corners, then apply the correction.</p><button class="btn primary" style="width:100%" onclick="applyPerspective()">Correct Perspective</button><button class="btn" style="width:100%;margin-top:8px" onclick="go(\'crop\')">Back</button></div></div>';initPerspective()};
-async function initPerspective(){const img=await imageBitmap(S.pages[S.page].src),c=$('#pcCanvas'),stage=c.parentElement,max=stage.clientWidth||700,scale=Math.min(1,max/img.width),w=Math.round(img.width*scale),h=Math.round(img.height*scale);c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,0,0,w,h);c._pc={img,w,h,pts:[{x:8,y:8},{x:w-8,y:8},{x:w-8,y:h-8},{x:8,y:h-8}],drag:-1};drawPC(c);c.onpointerdown=e=>{const r=c.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;c._pc.drag=c._pc.pts.findIndex(p=>Math.hypot(p.x-px,p.y-py)<22);if(c._pc.drag>=0)c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(c._pc.drag<0)return;const r=c.getBoundingClientRect(),p=c._pc.pts[c._pc.drag];p.x=Math.max(0,Math.min(w,e.clientX-r.left));p.y=Math.max(0,Math.min(h,e.clientY-r.top));drawPC(c)};c.onpointerup=()=>c._pc.drag=-1}
-function drawPC(c){const{x,w,h,pts}=c._pc;x.drawImage(x.canvas._pc?.img||c._pc.img,0,0,w,h);x.lineWidth=3;x.strokeStyle='#19d38a';x.beginPath();pts.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));x.closePath();x.stroke();pts.forEach((p,i)=>{x.fillStyle='#27b7ff';x.beginPath();x.arc(p.x,p.y,9,0,Math.PI*2);x.fill();x.fillStyle='#071525';x.font='bold 11px sans-serif';x.fillText(String(i+1),p.x-3,p.y+4)})}
-async function applyPerspective(){const c=$('#pcCanvas');if(!c?._pc)return;const q=c._pc,img=q.img,pts=q.pts;const W=Math.max(100,Math.round((Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)+Math.hypot(pts[2].x-pts[3].x,pts[2].y-pts[3].y))/2)),H=Math.max(100,Math.round((Math.hypot(pts[3].x-pts[0].x,pts[3].y-pts[0].y)+Math.hypot(pts[2].x-pts[1].x,pts[2].y-pts[1].y))/2));const out=document.createElement('canvas');out.width=W;out.height=H;const ctx=out.getContext('2d');ctx.drawImage(img,0,0,img.width,img.height,0,0,W,H);snapshot();S.pages[S.page].src=out.toDataURL('image/jpeg',.95);saveRecent();msg('Perspective crop applied');workspace()}
+(() => {
+"use strict";
+
+const $ = s => document.querySelector(s);
+const view = $("#view");
+const toast = $("#toast");
+const navItems = [
+  ["dashboard","⌂ Dashboard"],["workspace","▣ My Document"],["pdf","▤ PDF Studio"],
+  ["enhance","✦ Enhance"],["crop","⌗ Advanced Crop"],["idcard","▥ ID Card Organizer"],
+  ["image","◈ Image Tools"],["print","▦ Print Studio"],["scanner","⌁ Document Scanner"],
+  ["utilities","⚙ Utilities"],["settings","⚙ Settings"]
+];
+
+const S = {
+  file:null,name:"",type:"",pages:[],page:0,brightness:100,contrast:100,
+  grayscale:false,history:[],future:[],print:{paper:"A4",ipp:4,margin:10,gap:4,fit:"contain",rotation:0},
+  id:{w:85.6,h:53.98,gap:6,margin:10}
+};
+
+const PDF_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const ACCEPTED = /\.(jpe?g|png|webp|pdf)$/i;
+
+function msg(x){ if(!toast)return; toast.innerHTML='<div class="toast">'+escapeHtml(x)+"</div>"; setTimeout(()=>toast.innerHTML="",2600); }
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function validFile(f){return !!f && (ACCEPTED.test(f.name||"") || /application\/pdf/i.test(f.type||""));}
+function isPDF(f){return /\.pdf$/i.test(f.name||"") || /application\/pdf/i.test(f.type||"");}
+function saveRecent(){
+  try{localStorage.setItem("jdt-recent",JSON.stringify({
+    name:S.name,type:S.type,date:Date.now(),thumb:S.pages[0]?.src||""
+  }));}catch(e){}
+}
+function snapshot(){S.history.push(JSON.stringify(S.pages));if(S.history.length>20)S.history.shift();S.future=[];}
+function noDoc(){msg("Upload a document first");go("dashboard");}
+
+function renderNav(active="dashboard"){
+  const nav=$("#nav"); if(!nav)return;
+  nav.innerHTML=navItems.map(([id,t])=>'<button data-nav="'+id+'" class="'+(id===active?"active":"")+'">'+t+"</button>").join("");
+  nav.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>go(b.dataset.nav));
+}
+function go(id){
+  renderNav(id);
+  const item=navItems.find(x=>x[0]===id);
+  if($("#pageTitle"))$("#pageTitle").textContent=item?item[1].replace(/^[^ ]+ /,""):"Dashboard";
+  const fn={dashboard,workspace,pdf:pdfStudio,enhance,crop,idcard,image:imageTools,print:printStudio,scanner,utilities,settings}[id]||dashboard;
+  fn();
+}
+
+function openUpload(){$("#fileInput")?.click();}
+function readData(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(r.error||new Error("File read failed")); r.readAsDataURL(file);
+  });
+}
+function imageBitmap(src){
+  return new Promise((resolve,reject)=>{
+    const i=new Image(); i.onload=()=>resolve(i); i.onerror=()=>reject(new Error("Image decode failed")); i.src=src;
+  });
+}
+
+async function renderPDF(file){
+  if(!window.pdfjsLib)throw new Error("PDF.js is unavailable");
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER;
+  const pdf=await window.pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const pages=[];
+  for(let n=1;n<=pdf.numPages;n++){
+    const p=await pdf.getPage(n), vp=p.getViewport({scale:1.5});
+    const c=document.createElement("canvas"); c.width=Math.ceil(vp.width); c.height=Math.ceil(vp.height);
+    const ctx=c.getContext("2d",{alpha:false});
+    await p.render({canvasContext:ctx,viewport:vp}).promise;
+    pages.push({src:c.toDataURL("image/jpeg",.92),name:"Page "+n,rotation:0,flip:false,source:file.name});
+    c.width=1;c.height=1;
+  }
+  if(pdf.cleanup)pdf.cleanup();
+  if(pdf.destroy)await pdf.destroy();
+  return pages;
+}
+
+async function loadFiles(files){
+  const list=[...(files||[])].filter(validFile);
+  if(!list.length){msg("Choose JPG, PNG, WebP or PDF");return;}
+  try{
+    const fresh=!S.pages.length;
+    if(fresh){S.file=list[0];S.name=list.length===1?list[0].name:list[0].name+" +"+(list.length-1);S.type=list[0].type||"";S.pages=[];S.page=0;S.history=[];S.future=[];}
+    let added=0;
+    for(const file of list){
+      if(isPDF(file)){
+        const pages=await renderPDF(file); S.pages.push(...pages); added+=pages.length;
+      }else{
+        S.pages.push({src:await readData(file),name:file.name,rotation:0,flip:false,source:file.name}); added++;
+      }
+    }
+    S.page=Math.max(0,Math.min(S.page,S.pages.length-1));
+    saveRecent(); msg(added+" page(s) ready"); go("workspace");
+  }catch(e){console.error(e);msg("Could not load document: "+(e.message||"unknown error"));}
+}
+window.loadFiles=loadFiles; window.loadFile=f=>f?loadFiles([f]):null;
+
+function dashboard(){
+  view.innerHTML='<div class="hero"><div class="eyebrow">SMART DIGITAL WORKSPACE</div><h2>One upload. Many possibilities.</h2><p>Upload once, then crop, enhance, arrange, convert, build PDFs and prepare print-ready documents from the same Active Document.</p><button class="btn primary" onclick="openUpload()">＋ Upload Document</button><div class="drop" id="drop">Drop JPG, PNG, WebP or PDF here<br><small>Processing stays in your browser whenever possible.</small></div></div><div class="section-title"><h2>Frequently Used</h2></div><div class="cards">'+[
+["▥","ID Card Organizer","Front + back cards on A4","idcard"],["✦","Enhance","Clean, sharpen and scan","enhance"],["⌗","Advanced Crop","Perspective correction","crop"],["▦","Print Studio","Realistic A4 layouts","print"],["▤","PDF Studio","Merge, split and arrange","pdf"],["◈","Image Tools","Resize and compress","image"]
+].map(x=>'<div class="card" onclick="go(\''+x[3]+'\')"><div style="font-size:24px">'+x[0]+'</div><h3>'+x[1]+'</h3><p>'+x[2]+"</p></div>").join("")+"</div>";
+  const d=$("#drop");
+  if(d){d.ondragover=e=>{e.preventDefault();d.classList.add("drag")};d.ondragleave=()=>d.classList.remove("drag");d.ondrop=e=>{e.preventDefault();d.classList.remove("drag");loadFiles(e.dataTransfer.files)};}
+}
+
+function workspace(){
+  if(!S.pages.length){view.innerHTML='<div class="empty"><h2>No active document</h2><p>Upload a document to start the shared workspace.</p><button class="btn primary" onclick="openUpload()">Upload Document</button></div>';return;}
+  const p=S.pages[S.page];
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="mainImg" src="'+p.src+'" style="transform:rotate('+p.rotation+'deg) scaleX('+(p.flip?-1:1)+')"></div><div class="toolbar"><button class="tool" onclick="rotate(90)">↻ Rotate</button><button class="tool" onclick="rotate(-90)">↺ Rotate</button><button class="tool" onclick="flip()">↔ Flip</button><button class="tool" onclick="undo()">Undo</button><button class="tool" onclick="redo()">Redo</button><button class="tool" onclick="resetPage()">Reset</button></div><div class="page-grid">'+S.pages.map((q,i)=>'<div class="thumb" onclick="S.page='+i+';workspace()"><img src="'+q.src+'"><small>Page '+(i+1)+'</small></div>').join("")+'</div></div><div class="tools-panel"><h3>Active Document</h3><p>'+escapeHtml(S.name)+'</p><p class="muted">'+S.pages.length+' page(s)</p><button class="btn primary" style="width:100%" onclick="downloadCurrent()">Export JPG</button><button class="btn" style="width:100%;margin-top:8px" onclick="imageToPDF()">Export PDF</button><hr><button class="tool" onclick="go(\'crop\')">Advanced Crop →</button><button class="tool" onclick="go(\'enhance\')">Enhance →</button><button class="tool" onclick="go(\'print\')">Print Studio →</button></div></div>';
+}
+function rotate(a){if(!S.pages.length)return;snapshot();S.pages[S.page].rotation=(S.pages[S.page].rotation+a+360)%360;workspace();saveRecent();}
+function flip(){if(!S.pages.length)return;snapshot();S.pages[S.page].flip=!S.pages[S.page].flip;workspace();}
+function resetPage(){if(!S.pages.length)return;snapshot();S.pages[S.page].rotation=0;S.pages[S.page].flip=false;workspace();}
+function undo(){if(!S.history.length)return;S.future.push(JSON.stringify(S.pages));S.pages=JSON.parse(S.history.pop());workspace();}
+function redo(){if(!S.future.length)return;S.history.push(JSON.stringify(S.pages));S.pages=JSON.parse(S.future.pop());workspace();}
+
+function enhance(){
+  if(!S.pages.length)return noDoc();
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="enhImg" src="'+S.pages[S.page].src+'"></div></div><div class="tools-panel"><h3>Enhancer</h3><label>Brightness <output id="bv">'+S.brightness+'</output></label><input id="br" type="range" min="40" max="160" value="'+S.brightness+'"><label>Contrast <output id="cv">'+S.contrast+'</output></label><input id="ct" type="range" min="40" max="180" value="'+S.contrast+'"><label>Scan mode</label><select id="mode"><option>Clean Document</option><option>Print Ready</option><option>Text Scan</option><option>B&W Scan</option><option>ID Card</option><option>Photo Document</option></select><button class="btn primary" style="width:100%;margin-top:16px" onclick="applyEnhance()">Apply Enhancement</button></div></div>';
+  const update=()=>{S.brightness=+$("#br").value;S.contrast=+$("#ct").value;$("#bv").textContent=S.brightness;$("#cv").textContent=S.contrast;$("#enhImg").style.filter=filters();};
+  $("#br").oninput=update;$("#ct").oninput=update;$("#mode").onchange=e=>{const v=e.target.value;if(v==="Print Ready"){S.brightness=108;S.contrast=125}else if(v==="ID Card"){S.brightness=105;S.contrast=115}S.grayscale=v==="B&W Scan"||v==="Text Scan";enhance();};
+  update();
+}
+function filters(){return "brightness("+S.brightness+"%) contrast("+S.contrast+"%)"+(S.grayscale?" grayscale(1)":"");}
+async function applyEnhance(){if(!S.pages.length)return;snapshot();const img=await imageBitmap(S.pages[S.page].src),c=document.createElement("canvas");c.width=img.width;c.height=img.height;const x=c.getContext("2d");x.filter=filters();x.drawImage(img,0,0);S.pages[S.page].src=c.toDataURL("image/jpeg",.94);saveRecent();msg("Enhancement applied");workspace();}
+
+function crop(){
+  if(!S.pages.length)return noDoc();
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><div class="preview"><img id="cropImg" src="'+S.pages[S.page].src+'"></div></div><div class="tools-panel"><h3>Advanced Crop</h3><p class="muted">Choose a physical ratio or open four-point crop.</p><select id="cropPreset"><option value="free">Free</option><option value="a4">A4</option><option value="a5">A5</option><option value="id">ID Card</option><option value="passport">Passport</option></select><button class="btn primary" style="width:100%;margin-top:16px" onclick="cropPreset()">Apply Ratio Crop</button><button class="btn" style="width:100%;margin-top:8px" onclick="perspectiveCrop()">Four-Point Perspective Crop</button></div></div>';
+}
+async function cropPreset(){
+  const p=$("#cropPreset").value;if(p==="free"){msg("Select a ratio preset");return;}
+  const img=await imageBitmap(S.pages[S.page].src);const ratio=p==="a4"?210/297:p==="a5"?148/210:p==="id"?85.6/53.98:35/45;
+  let w=img.width,h=img.height,tw=w,th=w/ratio;if(th>h){th=h;tw=h*ratio}
+  const c=document.createElement("canvas");c.width=Math.round(tw);c.height=Math.round(th);c.getContext("2d").drawImage(img,(w-tw)/2,(h-th)/2,tw,th,0,0,tw,th);
+  snapshot();S.pages[S.page].src=c.toDataURL("image/jpeg",.95);saveRecent();workspace();msg("Crop applied");
+}
+function perspectiveCrop(){
+  if(!S.pages.length)return noDoc();
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>Four-Point Perspective Crop</h3><div class="preview"><canvas id="pcCanvas"></canvas></div></div><div class="tools-panel"><p class="muted">Drag all four points to the document corners.</p><button class="btn primary" style="width:100%" onclick="applyPerspective()">Apply Crop</button></div></div>';
+  initPerspective();
+}
+async function initPerspective(){
+  const img=await imageBitmap(S.pages[S.page].src),c=$("#pcCanvas"),max=680,scale=Math.min(1,max/img.width),w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale));
+  c.width=w;c.height=h;const x=c.getContext("2d");c._pc={img,w,h,pts:[{x:8,y:8},{x:w-8,y:8},{x:w-8,y:h-8},{x:8,y:h-8}],drag:-1};drawPC(c);
+  c.onpointerdown=e=>{const r=c.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;c._pc.drag=c._pc.pts.findIndex(p=>Math.hypot(p.x-px,p.y-py)<22);if(c._pc.drag>=0)c.setPointerCapture(e.pointerId)};
+  c.onpointermove=e=>{if(c._pc.drag<0)return;const r=c.getBoundingClientRect(),p=c._pc.pts[c._pc.drag];p.x=Math.max(0,Math.min(w,e.clientX-r.left));p.y=Math.max(0,Math.min(h,e.clientY-r.top));drawPC(c)};
+  c.onpointerup=()=>c._pc.drag=-1;
+}
+function drawPC(c){const q=c._pc,x=c.getContext("2d");x.clearRect(0,0,q.w,q.h);x.drawImage(q.img,0,0,q.w,q.h);x.strokeStyle="#19d38a";x.lineWidth=3;x.beginPath();q.pts.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));x.closePath();x.stroke();q.pts.forEach((p,i)=>{x.fillStyle="#27b7ff";x.beginPath();x.arc(p.x,p.y,9,0,Math.PI*2);x.fill();x.fillStyle="#071525";x.font="bold 11px sans-serif";x.fillText(i+1,p.x-3,p.y+4);});}
+async function applyPerspective(){
+  const c=$("#pcCanvas");if(!c?._pc)return;const q=c._pc,pts=q.pts;
+  const W=Math.max(100,Math.round((Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)+Math.hypot(pts[2].x-pts[3].x,pts[2].y-pts[3].y))/2));
+  const H=Math.max(100,Math.round((Math.hypot(pts[3].x-pts[0].x,pts[3].y-pts[0].y)+Math.hypot(pts[2].x-pts[1].x,pts[2].y-pts[1].y))/2));
+  const out=document.createElement("canvas");out.width=W;out.height=H;out.getContext("2d").drawImage(q.img,0,0,q.w,q.h,0,0,W,H);
+  snapshot();S.pages[S.page].src=out.toDataURL("image/jpeg",.95);saveRecent();msg("Perspective crop applied");workspace();
+}
+
+function pdfStudio(){
+  view.innerHTML='<div class="hero"><div class="eyebrow">PDF STUDIO</div><h2>Arrange, merge and export</h2><p>Manage the shared pages without uploading the same document again.</p><button class="btn primary" onclick="imageToPDF()">Export PDF</button> <button class="btn" onclick="openUpload()">＋ Add PDF / Images</button></div><div class="section-title"><h2>Pages ('+S.pages.length+')</h2></div><div class="page-grid">'+(S.pages.length?S.pages.map((p,i)=>'<div class="thumb"><img src="'+p.src+'"><small>Page '+(i+1)+'<br><button class="tool" onclick="movePage('+i+',-1)">←</button><button class="tool" onclick="movePage('+i+',1)">→</button><button class="tool" onclick="duplicatePage('+i+')">Duplicate</button><button class="tool" onclick="deletePage('+i+')">Delete</button></small></div>').join(""):'<div class="empty">No pages loaded.</div>')+"</div>";
+}
+function movePage(i,d){if(i+d<0||i+d>=S.pages.length)return;snapshot();[S.pages[i],S.pages[i+d]]=[S.pages[i+d],S.pages[i]];S.page=i+d;pdfStudio();}
+function duplicatePage(i){snapshot();S.pages.splice(i+1,0,{...S.pages[i],name:S.pages[i].name+" copy"});pdfStudio();}
+function deletePage(i){snapshot();S.pages.splice(i,1);S.page=Math.max(0,Math.min(S.page,S.pages.length-1));S.pages.length?pdfStudio():go("dashboard");}
+async function imageToPDF(){
+  if(!S.pages.length)return noDoc();const {jsPDF}=window.jspdf||{};if(!jsPDF)return msg("PDF engine unavailable");
+  const pdf=new jsPDF("p","mm","a4");
+  for(let i=0;i<S.pages.length;i++){if(i)pdf.addPage();const img=await imageBitmap(S.pages[i].src),r=img.width/img.height;let w=190,h=w/r;if(h>277){h=277;w=h*r}pdf.addImage(S.pages[i].src,"JPEG",(210-w)/2,(297-h)/2,w,h);}
+  pdf.save((S.name||"document").replace(/\.[^.]+$/,"")+".pdf");msg("PDF exported");
+}
+
+function idcard(){
+  if(!S.pages.length)return noDoc();const d=S.id;
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>ID Card A4 Layout</h3><div style="background:#fff;color:#111;max-width:500px;margin:auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:'+d.gap+'px">'+S.pages.slice(0,8).map(p=>'<div style="border:1px solid #aaa;aspect-ratio:'+d.w+'/'+d.h+';overflow:hidden"><img src="'+p.src+'" style="width:100%;height:100%;object-fit:fill"></div>').join("")+'</div></div><div class="tools-panel"><h3>Physical Card Size</h3><label>Width (mm)</label><input id="idW" type="number" step=".01" value="'+d.w+'"><label>Height (mm)</label><input id="idH" type="number" step=".01" value="'+d.h+'"><label>Gap (mm)</label><input id="idG" type="number" step=".5" value="'+d.gap+'"><label>Margin (mm)</label><input id="idM" type="number" step=".5" value="'+d.margin+'"><button class="btn primary" style="width:100%;margin-top:16px" onclick="exportIDCards()">Export A4 PDF</button></div></div>';
+}
+async function exportIDCards(){
+  S.id={w:+$("#idW").value||85.6,h:+$("#idH").value||53.98,gap:+$("#idG").value||6,margin:+$("#idM").value||10};
+  const {jsPDF}=window.jspdf,pdf=new jsPDF("p","mm","a4");const cols=Math.max(1,Math.floor((210-2*S.id.margin+S.id.gap)/(S.id.w+S.id.gap))),rows=Math.max(1,Math.floor((297-2*S.id.margin+S.id.gap)/(S.id.h+S.id.gap)));
+  for(let i=0;i<Math.min(S.pages.length,cols*rows);i++){const c=i%cols,r=Math.floor(i/cols);pdf.addImage(S.pages[i].src,"JPEG",S.id.margin+c*(S.id.w+S.id.gap),S.id.margin+r*(S.id.h+S.id.gap),S.id.w,S.id.h);}
+  pdf.save("id-card-a4.pdf");msg("A4 ID card PDF exported");
+}
+
+function imageTools(){
+  if(!S.pages.length)return noDoc();
+  view.innerHTML='<div class="cards"><div class="card"><h3>Convert</h3><p>Export current page.</p><button class="btn" onclick="downloadCurrent(\'png\')">PNG</button> <button class="btn" onclick="downloadCurrent(\'jpg\')">JPG</button></div><div class="card"><h3>Resize</h3><label>Width (px)</label><input id="rw" type="number" value="1200"><button class="btn primary" style="margin-top:10px" onclick="resizeImage()">Resize & Export</button></div><div class="card"><h3>Compression</h3><label>Quality</label><input id="quality" type="range" min="20" max="100" value="85"><button class="btn primary" onclick="compressImage()">Compress & Export</button></div></div>';
+}
+async function resizeImage(){const img=await imageBitmap(S.pages[S.page].src),w=Math.max(1,+$("#rw").value||img.width),h=Math.round(img.height*w/img.width),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);downloadData(c.toDataURL("image/jpeg",.92),"resized.jpg");}
+async function compressImage(){const img=await imageBitmap(S.pages[S.page].src),c=document.createElement("canvas");c.width=img.width;c.height=img.height;c.getContext("2d").drawImage(img,0,0);downloadData(c.toDataURL("image/jpeg",+$("#quality").value/100),"compressed.jpg");}
+function downloadCurrent(ext="jpg"){if(!S.pages.length)return noDoc();downloadData(S.pages[S.page].src,ext==="png"?"page.png":"page.jpg");}
+function downloadData(data,name){const a=document.createElement("a");a.href=data;a.download=name;a.click();}
+
+function printStudio(){
+  if(!S.pages.length)return noDoc();const p=S.print;
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>'+p.paper+' Print Preview</h3><div style="background:#fff;color:#111;max-width:500px;min-height:650px;margin:auto;padding:28px;display:grid;grid-template-columns:repeat('+Math.ceil(Math.sqrt(p.ipp))+',1fr);gap:'+p.gap+'px">'+S.pages.map(q=>'<div style="border:1px solid #aaa;min-height:80px;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="'+q.src+'" style="max-width:100%;max-height:100%;object-fit:'+p.fit+';transform:rotate('+p.rotation+'deg)"></div>').join("")+'</div></div><div class="tools-panel"><h3>Print Layout Studio</h3><label>Paper</label><select id="psPaper">'+["A4","A5","A3","Letter","Legal"].map(x=>'<option '+(p.paper===x?"selected":"")+">"+x+"</option>").join("")+'</select><label>Items per page</label><select id="psIpp">'+[1,2,4,6,8].map(n=>'<option '+(p.ipp===n?"selected":"")+" value="+n+">"+n+"</option>").join("")+'</select><label>Margin (mm)</label><input id="psMargin" type="number" value="'+p.margin+'"><label>Gap (mm)</label><input id="psGap" type="number" value="'+p.gap+'"><label>Fit</label><select id="psFit"><option value="contain" '+(p.fit==="contain"?"selected":"")+'>Fit</option><option value="cover" '+(p.fit==="cover"?"selected":"")+'>Fill</option></select><button class="btn primary" style="width:100%;margin-top:16px" onclick="applyPrintSettings()">Update Preview</button><button class="btn" style="width:100%;margin-top:8px" onclick="exportPrintPDF()">Export Print PDF</button><button class="btn" style="width:100%;margin-top:8px" onclick="window.print()">Print</button></div></div>';
+}
+function applyPrintSettings(){S.print={paper:$("#psPaper").value,ipp:+$("#psIpp").value,margin:+$("#psMargin").value||0,gap:+$("#psGap").value||0,fit:$("#psFit").value,rotation:S.print.rotation||0};printStudio();}
+async function exportPrintPDF(){await exportPagesToPDF(S.pages,"print-layout.pdf",S.print.paper,S.print.margin,S.print.gap,S.print.ipp);}
+async function exportPagesToPDF(pages,name,paper,margin,gap,ipp){
+  const {jsPDF}=window.jspdf,sz={A4:[210,297],A5:[148,210],A3:[297,420],Letter:[215.9,279.4],Legal:[215.9,355.6]}[paper]||[210,297],pdf=new jsPDF("p","mm",sz);
+  let k=0,n=0;while(k<pages.length){if(n++)pdf.addPage(sz,"p");const cols=Math.ceil(Math.sqrt(ipp)),rows=Math.ceil(ipp/cols),cw=(sz[0]-2*margin-(cols-1)*gap)/cols,ch=(sz[1]-2*margin-(rows-1)*gap)/rows;for(let i=0;i<ipp&&k<pages.length;i++,k++){const im=await imageBitmap(pages[k].src);let w=cw,h=w*im.height/im.width;if(h>ch){h=ch;w=h*im.width/im.height}const col=i%cols,row=Math.floor(i/cols);pdf.addImage(pages[k].src,"JPEG",margin+col*(cw+gap)+(cw-w)/2,margin+row*(ch+gap)+(ch-h)/2,w,h);}}
+  pdf.save(name);msg("PDF exported");
+}
+
+function scanner(){view.innerHTML='<div class="hero"><div class="eyebrow">DOCUMENT SCANNER</div><h2>Camera capture</h2><p>Capture pages with your phone camera and add them to the same document.</p><input type="file" accept="image/*" capture="environment" multiple onchange="loadFiles(this.files)" style="margin-top:16px"><button class="btn" style="margin-top:10px" onclick="openUpload()">Open Gallery / Files</button></div>';}
+function utilities(){view.innerHTML='<div class="cards">'+[["Blank A4","Generate a clean A4 PDF"],["Image Dimensions","Inspect current image"],["File Size","Check selected file size"],["PDF Page Counter","Count active pages"],["Metadata","Show file metadata"],["Page Extraction","Export selected page"],["Rename","Change export filename"],["Signature Resize","Resize signature using image tools"]].map((x,i)=>'<div class="card"><h3>'+x[0]+'</h3><p>'+x[1]+'</p><button class="btn" onclick="utility('+i+')">Open</button></div>').join("")+'</div>';}
+function utility(i){if(i===1&&S.pages.length)imageBitmap(S.pages[S.page].src).then(x=>msg(x.width+" × "+x.height+" px"));else if(i===2&&S.file)msg((S.file.size/1024).toFixed(1)+" KB");else if(i===3)msg(S.pages.length+" page(s)");else msg("Utility ready");}
+function settings(){view.innerHTML='<div class="cards"><div class="card"><h3>Privacy</h3><p>Processing is client-side where possible.</p></div><div class="card"><h3>Recent documents</h3><p>Stored locally in browser storage.</p><button class="btn danger" onclick="localStorage.removeItem(\'jdt-recent\');msg(\'Recent data cleared\')">Clear recent</button></div><div class="card"><h3>About</h3><p>Jangira E Mitra — Smart Document Toolkit<br>One Upload. Many Possibilities.</p></div></div>';}
+
+window.openUpload=openUpload;window.go=go;window.dashboard=dashboard;window.workspace=workspace;window.pdfStudio=pdfStudio;window.enhance=enhance;window.crop=crop;window.idcard=idcard;window.imageTools=imageTools;window.printStudio=printStudio;window.scanner=scanner;window.utilities=utilities;window.settings=settings;window.imageToPDF=imageToPDF;window.downloadCurrent=downloadCurrent;window.resizeImage=resizeImage;window.compressImage=compressImage;window.applyEnhance=applyEnhance;window.cropPreset=cropPreset;window.perspectiveCrop=perspectiveCrop;window.applyPerspective=applyPerspective;window.rotate=rotate;window.flip=flip;window.resetPage=resetPage;window.undo=undo;window.redo=redo;window.movePage=movePage;window.duplicatePage=duplicatePage;window.deletePage=deletePage;window.exportPrintPDF=exportPrintPDF;window.applyPrintSettings=applyPrintSettings;window.exportIDCards=exportIDCards;window.utility=utility;window.saveRecent=saveRecent;
+
+const input=$("#fileInput");if(input)input.onchange=e=>{loadFiles(e.target.files);e.target.value="";};
+const upload=$("#uploadBtn");if(upload)upload.onclick=openUpload;
+const recent=$("#openRecent");if(recent)recent.onclick=()=>{try{const r=JSON.parse(localStorage.getItem("jdt-recent")||"null");if(r?.thumb){S.name=r.name||"Recent document";S.pages=[{src:r.thumb,name:S.name,rotation:0,flip:false}];go("workspace");}else msg("No recent document");}catch{msg("No recent document");}};
+const menu=$("#menu");if(menu)menu.onclick=()=>$(".sidebar")?.classList.toggle("open");
+renderNav("dashboard");dashboard();
+})();
