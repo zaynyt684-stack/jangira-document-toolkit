@@ -159,8 +159,31 @@ async function applyPerspective(){
 }
 
 function pdfStudio(){
-  view.innerHTML='<div class="hero"><div class="eyebrow">PDF STUDIO</div><h2>Arrange, merge and export</h2><p>Manage the shared pages without uploading the same document again.</p><button class="btn primary" onclick="imageToPDF()">Export PDF</button> <button class="btn" onclick="openUpload()">＋ Add PDF / Images</button></div><div class="section-title"><h2>Pages ('+S.pages.length+')</h2></div><div class="page-grid">'+(S.pages.length?S.pages.map((p,i)=>'<div class="thumb"><img src="'+p.src+'"><small>Page '+(i+1)+'<br><button class="tool" onclick="movePage('+i+',-1)">←</button><button class="tool" onclick="movePage('+i+',1)">→</button><button class="tool" onclick="duplicatePage('+i+')">Duplicate</button><button class="tool" onclick="deletePage('+i+')">Delete</button></small></div>').join(""):'<div class="empty">No pages loaded.</div>')+"</div>";
+  view.innerHTML='<div class="hero"><div class="eyebrow">PDF STUDIO</div><h2>Build your PDF visually</h2><p>Select pages, reorder them, duplicate, rotate, delete, extract or split the current Active Document.</p><button class="btn primary" onclick="imageToPDF()">Export All PDF</button> <button class="btn" onclick="openUpload()">＋ Add PDF / Images</button></div>'+
+  '<div class="section-title"><h2>Pages ('+S.pages.length+')</h2><div><button class="tool" onclick="selectAllPDF(true)">Select all</button> <button class="tool" onclick="selectAllPDF(false)">Clear</button></div></div>'+
+  '<div class="page-grid">'+(S.pages.length?S.pages.map((p,i)=>'<div class="thumb"><label style="display:flex;gap:6px;align-items:center;margin:0 0 6px"><input type="checkbox" class="pdfSel" data-i="'+i+'"> Select</label><img src="'+p.src+'"><small>Page '+(i+1)+'<br><button class="tool" onclick="movePage('+i+',-1)">←</button><button class="tool" onclick="movePage('+i+',1)">→</button><button class="tool" onclick="rotatePagePDF('+i+')">↻</button><button class="tool" onclick="duplicatePage('+i+')">Duplicate</button><button class="tool" onclick="deletePage('+i+')">Delete</button></small></div>').join(""):'<div class="empty">No pages loaded.</div>')+'</div>'+
+  '<div class="cards">'+
+  '<div class="card"><h3>Selected pages</h3><p>Apply an operation to checked pages.</p><button class="btn" onclick="deleteSelectedPDF()">Delete selected</button> <button class="btn" onclick="duplicateSelectedPDF()">Duplicate selected</button> <button class="btn" onclick="extractSelectedPDF()">Extract PDF</button></div>'+
+  '<div class="card"><h3>Split PDF</h3><p>Choose how the active pages are divided into separate PDFs.</p><select id="splitMode"><option value="every">Every N pages</option><option value="range">Page range</option><option value="odd">Odd pages</option><option value="even">Even pages</option><option value="selected">Selected pages</option></select><input id="splitValue" type="text" placeholder="N or range e.g. 1-3" style="margin-top:8px"><button class="btn primary" style="margin-top:8px" onclick="splitPDF()">Split & Export</button></div></div>';
 }
+function selectedPDFIndices(){return [...document.querySelectorAll(".pdfSel:checked")].map(x=>+x.dataset.i).sort((a,b)=>a-b);}
+function selectAllPDF(v){document.querySelectorAll(".pdfSel").forEach(x=>x.checked=v);}
+function rotatePagePDF(i){snapshot();S.pages[i].rotation=(S.pages[i].rotation+90)%360;pdfStudio();}
+function deleteSelectedPDF(){const ids=selectedPDFIndices();if(!ids.length)return msg("Select pages first");snapshot();S.pages=S.pages.filter((_,i)=>!ids.includes(i));S.page=Math.max(0,Math.min(S.page,S.pages.length-1));pdfStudio();}
+function duplicateSelectedPDF(){const ids=selectedPDFIndices();if(!ids.length)return msg("Select pages first");snapshot();const out=[];S.pages.forEach((p,i)=>{out.push(p);if(ids.includes(i))out.push({...p,name:p.name+" copy"});});S.pages=out;pdfStudio();}
+async function extractSelectedPDF(){const ids=selectedPDFIndices();if(!ids.length)return msg("Select pages first");await exportPagesToPDF(ids.map(i=>S.pages[i]),"extracted-pages.pdf","A4",10,4,1);}
+function parseRange(v,max){const m=String(v||"").match(/^(\\d+)\\s*-\\s*(\\d+)$/);if(!m)return null;let a=Math.max(1,+m[1]),b=Math.min(max,+m[2]);if(a>b)[a,b]=[b,a];return Array.from({length:b-a+1},(_,i)=>a-1+i);}
+async function splitPDF(){
+  if(!S.pages.length)return noDoc();const mode=$("#splitMode").value,val=$("#splitValue").value.trim();let groups=[];
+  if(mode==="every"){const n=Math.max(1,parseInt(val||"1",10));for(let i=0;i<S.pages.length;i+=n)groups.push(S.pages.slice(i,i+n));}
+  else if(mode==="range"){const ids=parseRange(val,S.pages.length);if(!ids)return msg("Enter a range like 1-3");groups=[ids.map(i=>S.pages[i])];}
+  else if(mode==="odd")groups=[S.pages.filter((_,i)=>i%2===0)];
+  else if(mode==="even")groups=[S.pages.filter((_,i)=>i%2===1)];
+  else {const ids=selectedPDFIndices();if(!ids.length)return msg("Select pages first");groups=[ids.map(i=>S.pages[i])];}
+  for(let i=0;i<groups.length;i++) await exportPagesToPDF(groups[i],"split-"+(i+1)+".pdf","A4",10,4,1);
+  msg(groups.length+" PDF file(s) exported");
+}
+
 function movePage(i,d){if(i+d<0||i+d>=S.pages.length)return;snapshot();[S.pages[i],S.pages[i+d]]=[S.pages[i+d],S.pages[i]];S.page=i+d;pdfStudio();}
 function duplicatePage(i){snapshot();S.pages.splice(i+1,0,{...S.pages[i],name:S.pages[i].name+" copy"});pdfStudio();}
 function deletePage(i){snapshot();S.pages.splice(i,1);S.page=Math.max(0,Math.min(S.page,S.pages.length-1));S.pages.length?pdfStudio():go("dashboard");}
