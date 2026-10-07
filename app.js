@@ -196,12 +196,18 @@ async function imageToPDF(){
 
 function idcard(){
   if(!S.pages.length)return noDoc();const d=S.id;
-  view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>ID Card A4 Layout</h3><div style="background:#fff;color:#111;max-width:500px;margin:auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:'+d.gap+'px">'+S.pages.slice(0,8).map(p=>'<div style="border:1px solid #aaa;aspect-ratio:'+d.w+'/'+d.h+';overflow:hidden"><img src="'+p.src+'" style="width:100%;height:100%;object-fit:fill"></div>').join("")+'</div></div><div class="tools-panel"><h3>Physical Card Size</h3><label>Width (mm)</label><input id="idW" type="number" step=".01" value="'+d.w+'"><label>Height (mm)</label><input id="idH" type="number" step=".01" value="'+d.h+'"><label>Gap (mm)</label><input id="idG" type="number" step=".5" value="'+d.gap+'"><label>Margin (mm)</label><input id="idM" type="number" step=".5" value="'+d.margin+'"><button class="btn primary" style="width:100%;margin-top:16px" onclick="exportIDCards()">Export A4 PDF</button></div></div>';
+  const front=S.id.front||S.pages[0]?.src||"",back=S.id.back||S.pages[1]?.src||"";
+  view.innerHTML='<div class="workspace"><div class="canvas-panel"><h3>ID Card Organizer</h3><p class="muted">Add front and back sides separately, then arrange them at the exact physical card size.</p><div class="cards"><div class="card"><h3>Front</h3><input id="idFront" type="file" accept="image/*"><img src="'+front+'" style="width:100%;max-height:180px;object-fit:contain;margin-top:8px"></div><div class="card"><h3>Back</h3><input id="idBack" type="file" accept="image/*"><img src="'+back+'" style="width:100%;max-height:180px;object-fit:contain;margin-top:8px"></div></div></div><div class="tools-panel"><h3>Physical Card Size</h3><label>Width (mm)</label><input id="idW" type="number" step=".01" value="'+d.w+'"><label>Height (mm)</label><input id="idH" type="number" step=".01" value="'+d.h+'"><label>Gap (mm)</label><input id="idG" type="number" step=".5" value="'+d.gap+'"><label>Margin (mm)</label><input id="idM" type="number" step=".5" value="'+d.margin+'"><label>Layout</label><select id="idLayout"><option value="side">Front + Back</option><option value="pages">Use Active Pages</option></select><button class="btn primary" style="width:100%;margin-top:16px" onclick="exportIDCards()">Export A4 PDF</button></div></div>';
+  $("#idFront").onchange=async e=>{if(e.target.files[0]){S.id.front=await readData(e.target.files[0]);idcard();}};
+  $("#idBack").onchange=async e=>{if(e.target.files[0]){S.id.back=await readData(e.target.files[0]);idcard();}};
 }
 async function exportIDCards(){
-  S.id={w:+$("#idW").value||85.6,h:+$("#idH").value||53.98,gap:+$("#idG").value||6,margin:+$("#idM").value||10};
-  const {jsPDF}=window.jspdf,pdf=new jsPDF("p","mm","a4");const cols=Math.max(1,Math.floor((210-2*S.id.margin+S.id.gap)/(S.id.w+S.id.gap))),rows=Math.max(1,Math.floor((297-2*S.id.margin+S.id.gap)/(S.id.h+S.id.gap)));
-  for(let i=0;i<Math.min(S.pages.length,cols*rows);i++){const c=i%cols,r=Math.floor(i/cols);pdf.addImage(S.pages[i].src,"JPEG",S.id.margin+c*(S.id.w+S.id.gap),S.id.margin+r*(S.id.h+S.id.gap),S.id.w,S.id.h);}
+  S.id={...S.id,w:+$("#idW").value||85.6,h:+$("#idH").value||53.98,gap:+$("#idG").value||6,margin:+$("#idM").value||10};
+  const {jsPDF}=window.jspdf,pdf=new jsPDF("p","mm","a4"),cols=Math.max(1,Math.floor((210-2*S.id.margin+S.id.gap)/(S.id.w+S.id.gap))),rows=Math.max(1,Math.floor((297-2*S.id.margin+S.id.gap)/(S.id.h+S.id.gap))),layout=$("#idLayout").value;
+  const cards=[];
+  if(layout==="side" && S.id.front){cards.push(S.id.front);if(S.id.back)cards.push(S.id.back);}
+  else cards.push(...S.pages.map(p=>p.src));
+  for(let i=0;i<Math.min(cards.length,cols*rows);i++){const col=i%cols,row=Math.floor(i/cols);pdf.addImage(cards[i],"JPEG",S.id.margin+col*(S.id.w+S.id.gap),S.id.margin+row*(S.id.h+S.id.gap),S.id.w,S.id.h);}
   pdf.save("id-card-a4.pdf");msg("A4 ID card PDF exported");
 }
 
