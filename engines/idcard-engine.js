@@ -1,0 +1,1 @@
+export const ID_CARD_MM={width:85.60,height:53.98};
