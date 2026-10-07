@@ -1,0 +1,1 @@
+export function cameraInput(){const i=document.createElement("input");i.type="file";i.accept="image/*";i.capture="environment";return i}
