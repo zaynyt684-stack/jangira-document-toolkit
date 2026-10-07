@@ -1,0 +1,1 @@
+export function a4Fit(width,height,maxW=190,maxH=277){const r=width/height;let w=maxW,h=w/r;if(h>maxH){h=maxH;w=h*r}return {w,h}}
