@@ -1,0 +1,1 @@
+export function cropCenter(img,ratio){let w=img.naturalWidth,h=img.naturalHeight,tw=w,th=w/ratio;if(th>h){th=h;tw=h*ratio}const c=document.createElement("canvas");c.width=Math.round(tw);c.height=Math.round(th);c.getContext("2d").drawImage(img,(w-tw)/2,(h-th)/2,tw,th,0,0,tw,th);return c}
