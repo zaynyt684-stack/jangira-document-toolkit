@@ -24,6 +24,22 @@ function msg(x){ if(!toast)return; toast.innerHTML='<div class="toast">'+escapeH
 function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function validFile(f){return !!f && (ACCEPTED.test(f.name||"") || /application\/pdf/i.test(f.type||""));}
 function isPDF(f){return /\.pdf$/i.test(f.name||"") || /application\/pdf/i.test(f.type||"");}
+
+// ===== PROFESSIONAL FOUNDATION PATCH =====
+function proEnsureState(){
+ if(!window.S) return;
+ S.pages=Array.isArray(S.pages)?S.pages:[];
+ S.page=Math.max(0,Math.min(S.page||0,S.pages.length-1));
+ S.history=Array.isArray(S.history)?S.history:[];
+ S.future=Array.isArray(S.future)?S.future:[];
+ S.scan=Array.isArray(S.scan)?S.scan:[];
+ S.print=S.print||{paper:"A4",orientation:"p",ipp:4,margin:10,gap:4,fit:"contain",rotation:0};
+}
+proEnsureState();
+window.JangiraApp={version:"2.0.0-pro",product:"Jangira E Mitra Smart Document Toolkit",ready:true};
+window.addEventListener("error",e=>{console.error("[Jangira]",e.error||e.message)});
+window.addEventListener("unhandledrejection",e=>console.error("[Jangira]",e.reason));
+
 function saveRecent(){
   try{localStorage.setItem("jdt-recent",JSON.stringify({
     name:S.name,type:S.type,date:Date.now(),thumb:S.pages[0]?.src||""
