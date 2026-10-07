@@ -1,0 +1,1 @@
+export function enhancementFilter({brightness=100,contrast=100,grayscale=false}={}){return "brightness("+brightness+"%) contrast("+contrast+"%)"+(grayscale?" grayscale(1)":"")}
