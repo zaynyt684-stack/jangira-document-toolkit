@@ -1,0 +1,3 @@
+export async function imageFromDataURL(src){return new Promise((resolve,reject)=>{const i=new Image;i.onload=()=>resolve(i);i.onerror=reject;i.src=src})}
+export function canvasExport(canvas,type="image/jpeg",quality=.92){return canvas.toDataURL(type,quality)}
+export function resizeCanvas(source,w,h){const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(source,0,0,w,h);return c}
