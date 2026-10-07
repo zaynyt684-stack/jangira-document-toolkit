@@ -152,8 +152,10 @@ async function applyPerspective(){
   const c=$("#pcCanvas");if(!c?._pc)return;const q=c._pc,pts=q.pts;
   const W=Math.max(100,Math.round((Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)+Math.hypot(pts[2].x-pts[3].x,pts[2].y-pts[3].y))/2));
   const H=Math.max(100,Math.round((Math.hypot(pts[3].x-pts[0].x,pts[3].y-pts[0].y)+Math.hypot(pts[2].x-pts[1].x,pts[2].y-pts[1].y))/2));
-  const out=document.createElement("canvas");out.width=W;out.height=H;out.getContext("2d").drawImage(q.img,0,0,q.w,q.h,0,0,W,H);
-  snapshot();S.pages[S.page].src=out.toDataURL("image/jpeg",.95);saveRecent();msg("Perspective crop applied");workspace();
+  const scaledPts=pts.map(p=>({x:p.x/Math.max(0.0001,q.w/q.img.width),y:p.y/Math.max(0.0001,q.h/q.img.height)}));
+  const out=window.JangiraPerspective?.warp(q.img,scaledPts,W,H);
+  if(!out){msg("Perspective engine unavailable");return;}
+  snapshot();S.pages[S.page].src=out.toDataURL("image/jpeg",.95);saveRecent();msg("True perspective crop applied");workspace();
 }
 
 function pdfStudio(){
